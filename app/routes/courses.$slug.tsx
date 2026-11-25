@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useFetcher, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import type { Route } from "./+types/courses.$slug";
 import {
@@ -42,6 +42,16 @@ import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice, getCountryTierInfo } from "~/lib/ppp";
+import {
+  canUserRateCourse,
+  getCourseRatingSummary,
+  getUserRatingForCourse,
+  rateCourse,
+} from "~/services/ratingService";
+import {
+  CourseRatingSummary,
+  StarRatingInput,
+} from "~/components/star-rating";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const title = loaderData?.course?.title ?? "Course";
@@ -71,6 +81,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   let progress = 0;
   let lessonProgressMap: Record<number, string> = {};
   let nextLessonId: number | null = null;
+  let canRate = false;
+  let userRating: number | null = null;
 
   if (currentUserId) {
     enrolled = isUserEnrolled(currentUserId, course.id);
@@ -89,7 +101,15 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       const nextLesson = getNextIncompleteLesson(currentUserId, course.id);
       nextLessonId = nextLesson?.id ?? null;
     }
+
+    canRate = canUserRateCourse(currentUserId, course.id);
+    if (canRate) {
+      userRating =
+        getUserRatingForCourse(currentUserId, course.id)?.rating ?? null;
+    }
   }
+
+  const ratingSummary = getCourseRatingSummary(course.id);
 
   // Render sales copy from Markdown to HTML server-side
   const salesCopyHtml = courseWithDetails.salesCopy
@@ -113,10 +133,44 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     currentUserId,
     pppPrice,
     tierInfo,
+    ratingSummary,
+    canRate,
+    userRating,
   };
 }
 
-// No action — enrollment is handled via the purchase confirmation page
+// Enrollment is handled via the purchase confirmation page.
+// The only action here is rating the course.
+export async function action({ params, request }: Route.ActionArgs) {
+  const course = getCourseBySlug(params.slug);
+  if (!course) {
+    throw data("Course not found", { status: 404 });
+  }
+
+  const currentUserId = await getCurrentUserId(request);
+  if (!currentUserId) {
+    throw data("You must be logged in", { status: 401 });
+  }
+
+  const formData = await request.formData();
+  if (formData.get("intent") !== "rate") {
+    throw data("Unknown action", { status: 400 });
+  }
+
+  const rating = Number(formData.get("rating"));
+  try {
+    const saved = rateCourse(currentUserId, course.id, rating);
+    return { success: true as const, rating: saved.rating };
+  } catch (e) {
+    return data(
+      {
+        success: false as const,
+        error: e instanceof Error ? e.message : "Could not save rating",
+      },
+      { status: 400 }
+    );
+  }
+}
 
 export function HydrateFallback() {
   return (
@@ -181,6 +235,9 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     currentUserId,
     pppPrice,
     tierInfo,
+    ratingSummary,
+    canRate,
+    userRating,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -310,6 +367,10 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
             />
             {course.instructorName}
           </span>
+          <CourseRatingSummary
+            average={ratingSummary.average}
+            count={ratingSummary.count}
+          />
           <span className="flex items-center gap-1">
             <BookOpen className="size-4" />
             {lessonCount} lessons
@@ -413,6 +474,9 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                       Buy More Seats
                     </Button>
                   </Link>
+                  {canRate && (
+                    <RateCourse courseId={course.id} userRating={userRating} />
+                  )}
                 </>
               ) : (
                 enrollButton
@@ -446,6 +510,52 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RateCourse({
+  courseId,
+  userRating,
+}: {
+  courseId: number;
+  userRating: number | null;
+}) {
+  const fetcher = useFetcher<typeof action>({ key: `rate-course-${courseId}` });
+
+  // Optimistic value while a submission is in flight
+  const pendingRating = fetcher.formData
+    ? Number(fetcher.formData.get("rating"))
+    : null;
+  const current = pendingRating ?? userRating;
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+    if (fetcher.data.success) {
+      toast.success("Thanks for rating this course!");
+    } else {
+      toast.error(fetcher.data.error);
+    }
+  }, [fetcher.state, fetcher.data]);
+
+  return (
+    <div className="border-t pt-4">
+      <div className="mb-2 text-sm font-medium">
+        {current ? "Your rating" : "Rate this course"}
+      </div>
+      <fetcher.Form method="post">
+        <input type="hidden" name="intent" value="rate" />
+        <StarRatingInput
+          value={current}
+          disabled={fetcher.state !== "idle"}
+          onSelect={(rating) =>
+            fetcher.submit(
+              { intent: "rate", rating: String(rating) },
+              { method: "post" }
+            )
+          }
+        />
+      </fetcher.Form>
     </div>
   );
 }
