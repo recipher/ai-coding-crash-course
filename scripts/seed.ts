@@ -45,6 +45,7 @@ async function seed() {
 
   // Drop and recreate tables for a clean seed
   sqlite.exec(`
+    DROP TABLE IF EXISTS lesson_comments;
     DROP TABLE IF EXISTS course_ratings;
     DROP TABLE IF EXISTS video_watch_events;
     DROP TABLE IF EXISTS quiz_answers;
@@ -1457,6 +1458,88 @@ You've completed the Building REST APIs course. You now have the skills to build
 
   console.log("Created 6 course ratings.");
 
+  // ─── Lesson Comments ───
+  // A discussion on the first lesson of course 1 showing each badge style:
+  // the course's own instructor (filled), another instructor (outline) and an
+  // admin. Includes an edited comment and one soft-deleted thread (hidden).
+
+  const commentLessonId = course1LessonIds[0];
+
+  const insertComment = (values: typeof schema.lessonComments.$inferInsert) =>
+    db.insert(schema.lessonComments).values(values).returning().get();
+
+  const question = insertComment({
+    lessonId: commentLessonId,
+    userId: students[0].id,
+    content:
+      "Quick question: do I need to install anything before starting, or is the browser enough?",
+    createdAt: daysAgo(3),
+    updatedAt: daysAgo(3),
+  });
+  insertComment({
+    lessonId: commentLessonId,
+    userId: instructor1.id,
+    parentId: question.id,
+    content:
+      "The browser is enough for this module. We'll set up a local environment in module 2.",
+    createdAt: daysAgo(2),
+    updatedAt: daysAgo(2),
+  });
+  insertComment({
+    lessonId: commentLessonId,
+    userId: students[0].id,
+    parentId: question.id,
+    content: "Perfect, thanks!",
+    createdAt: daysAgo(2),
+    updatedAt: daysAgo(2),
+  });
+
+  const tip = insertComment({
+    lessonId: commentLessonId,
+    userId: students[2].id,
+    content:
+      "Tip for anyone else: watching at 1.25x and pausing for the examples worked well for me.\nThe summary at the end is worth rewatching too.",
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(1),
+    editedAt: daysAgo(1),
+  });
+  insertComment({
+    lessonId: commentLessonId,
+    userId: instructor2.id,
+    parentId: tip.id,
+    content: "Great advice — I recommend the same in my course.",
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(1),
+  });
+  insertComment({
+    lessonId: commentLessonId,
+    userId: admin.id,
+    parentId: tip.id,
+    content: "Thanks for sharing! Playback speed controls are in the video settings.",
+    createdAt: daysAgo(0),
+    updatedAt: daysAgo(0),
+  });
+
+  const deletedThread = insertComment({
+    lessonId: commentLessonId,
+    userId: students[4].id,
+    content: "This comment was deleted along with its reply.",
+    createdAt: daysAgo(4),
+    updatedAt: daysAgo(2),
+    deletedAt: daysAgo(2),
+  });
+  insertComment({
+    lessonId: commentLessonId,
+    userId: students[1].id,
+    parentId: deletedThread.id,
+    content: "This reply was deleted with its thread.",
+    createdAt: daysAgo(3),
+    updatedAt: daysAgo(2),
+    deletedAt: daysAgo(2),
+  });
+
+  console.log("Created 8 lesson comments (6 visible, 1 deleted thread).");
+
   // ─── Lesson Progress ───
 
   // Helper to mark lessons as complete
@@ -1790,6 +1873,7 @@ You've completed the Building REST APIs course. You now have the skills to build
   console.log("  Quizzes: 3");
   console.log("  Enrollments: 7");
   console.log("  Course ratings: 6");
+  console.log("  Lesson comments: 8 (6 visible)");
   console.log("  Purchases: 6 (5 individual + 1 team)");
   console.log("  Teams: 1 (with 5 coupons)");
 }

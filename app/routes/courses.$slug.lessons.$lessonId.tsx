@@ -55,6 +55,14 @@ import { resolveCountry } from "~/lib/country.server";
 import { checkPppAccess, COUNTRIES } from "~/lib/ppp";
 import { findPurchase } from "~/services/purchaseService";
 import { parseFormData, parseParams } from "~/lib/validation";
+import { getUserById } from "~/services/userService";
+import {
+  addComment,
+  editComment,
+  deleteComment,
+  getCommentsForLesson,
+} from "~/services/lessonCommentService";
+import { LessonDiscussion } from "~/components/lesson-discussion";
 
 const lessonParamsSchema = z.object({
   slug: z.string().min(1),
@@ -63,6 +71,25 @@ const lessonParamsSchema = z.object({
 
 const markCompleteSchema = z.object({
   intent: z.literal("mark-complete"),
+});
+
+// Content length/emptiness is validated in lessonCommentService so the rules
+// live in one place; these schemas only check shape.
+const addCommentSchema = z.object({
+  intent: z.literal("add-comment"),
+  content: z.string(),
+  parentId: z.coerce.number().int().positive().optional(),
+});
+
+const editCommentSchema = z.object({
+  intent: z.literal("edit-comment"),
+  commentId: z.coerce.number().int().positive(),
+  content: z.string(),
+});
+
+const deleteCommentSchema = z.object({
+  intent: z.literal("delete-comment"),
+  commentId: z.coerce.number().int().positive(),
 });
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -248,6 +275,17 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
+  // Discussion is visible to any logged-in user (enrolled or not). Logged-out
+  // visitors get null and see a login prompt instead.
+  const currentUser = currentUserId ? getUserById(currentUserId) : undefined;
+  const discussion = currentUser
+    ? {
+        ...getCommentsForLesson(lessonId),
+        courseInstructorId: course.instructorId,
+        currentUserRole: currentUser.role,
+      }
+    : null;
+
   return {
     course: {
       id: courseWithDetails.id,
@@ -281,6 +319,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     pppBlocked,
     pppBlockedCountry,
     pppPurchaseCountry,
+    discussion,
   };
 }
 
@@ -299,6 +338,14 @@ export async function action({ params, request }: Route.ActionArgs) {
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+
+  if (
+    intent === "add-comment" ||
+    intent === "edit-comment" ||
+    intent === "delete-comment"
+  ) {
+    return handleCommentAction(currentUserId, course.id, lessonId, formData);
+  }
 
   if (intent === "mark-complete") {
     markLessonComplete(currentUserId, lessonId);
@@ -332,6 +379,50 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   throw data("Invalid action", { status: 400 });
+}
+
+function handleCommentAction(
+  userId: number,
+  courseId: number,
+  lessonId: number,
+  formData: FormData
+): { ok: boolean; error: string | null } {
+  const lesson = getLessonById(lessonId);
+  const mod = lesson ? getModuleById(lesson.moduleId) : null;
+  if (!mod || mod.courseId !== courseId) {
+    throw data("Lesson not found in this course", { status: 404 });
+  }
+
+  const intent = formData.get("intent");
+  const schema =
+    intent === "add-comment"
+      ? addCommentSchema
+      : intent === "edit-comment"
+        ? editCommentSchema
+        : deleteCommentSchema;
+
+  const parsed = parseFormData(formData, schema);
+  if (!parsed.success) {
+    return { ok: false, error: Object.values(parsed.errors)[0] ?? "Invalid input" };
+  }
+
+  try {
+    const input = parsed.data;
+    if (input.intent === "add-comment") {
+      addComment(userId, lessonId, input.content, input.parentId ?? null);
+    } else if (input.intent === "edit-comment") {
+      editComment(userId, input.commentId, input.content);
+    } else {
+      deleteComment(userId, input.commentId);
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Something went wrong",
+    };
+  }
+
+  return { ok: true, error: null };
 }
 
 const AUTOPLAY_KEY = "cadence-autoplay";
@@ -382,6 +473,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     pppBlocked,
     pppBlockedCountry,
     pppPurchaseCountry,
+    discussion,
   } = loaderData;
   const [autoplay, toggleAutoplay] = useAutoplay();
   const fetcher = useFetcher({ key: `mark-complete-${lesson.id}` });
@@ -639,6 +731,16 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               </Link>
             )}
           </div>
+
+          {/* Discussion */}
+          <LessonDiscussion
+            key={lesson.id}
+            loginHref={`/login?redirectTo=${encodeURIComponent(
+              `/courses/${course.slug}/lessons/${lesson.id}`
+            )}`}
+            currentUserId={currentUserId ?? null}
+            discussion={discussion}
+          />
         </div>
       </div>
     </div>

@@ -4,6 +4,8 @@ import {
   integer,
   real,
   uniqueIndex,
+  index,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
 export enum UserRole {
@@ -287,3 +289,32 @@ export const videoWatchEvents = sqliteTable("video_watch_events", {
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
 });
+
+export const lessonComments = sqliteTable(
+  "lesson_comments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    lessonId: integer("lesson_id")
+      .notNull()
+      .references(() => lessons.id),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    // Null for top-level comments. Replies always point at a top-level
+    // comment (one level deep) — enforced in lessonCommentService.
+    parentId: integer("parent_id").references(
+      (): AnySQLiteColumn => lessonComments.id
+    ),
+    // Plain text, trimmed, 1–2000 chars. Enforced in lessonCommentService.
+    content: text("content").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    editedAt: text("edited_at"),
+    deletedAt: text("deleted_at"),
+  },
+  (table) => [index("lesson_comments_lesson_id_idx").on(table.lessonId)]
+);
