@@ -82,6 +82,7 @@ async function seed() {
       email: "alex.rivera@ralph.dev",
       role: UserRole.Admin,
       avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=alex",
+      dateOfBirth: "1985-03-14",
       createdAt: daysAgo(120),
     })
     .returning()
@@ -94,6 +95,7 @@ async function seed() {
       email: "sarah.chen@ralph.dev",
       role: UserRole.Instructor,
       avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=sarah",
+      dateOfBirth: "1988-07-22",
       bio: "Senior TypeScript engineer with 10 years of experience building large-scale web applications. Previously at Stripe and Vercel. Passionate about type safety and developer tooling.",
       createdAt: daysAgo(100),
     })
@@ -107,6 +109,7 @@ async function seed() {
       email: "marcus.johnson@ralph.dev",
       role: UserRole.Instructor,
       avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=marcus",
+      dateOfBirth: "1983-11-05",
       bio: "Full-stack developer and API architect specializing in Node.js and cloud infrastructure. Has built and scaled APIs serving millions of requests daily. Conference speaker and open-source contributor.",
       createdAt: daysAgo(95),
     })
@@ -121,6 +124,7 @@ async function seed() {
         email: "emma.wilson@student.dev",
         role: UserRole.Student,
         avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=emma",
+        dateOfBirth: "1999-02-18",
         createdAt: daysAgo(60),
       },
       {
@@ -128,6 +132,7 @@ async function seed() {
         email: "james.park@student.dev",
         role: UserRole.Student,
         avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=james",
+        dateOfBirth: "2001-09-30",
         createdAt: daysAgo(55),
       },
       {
@@ -135,6 +140,7 @@ async function seed() {
         email: "olivia.martinez@student.dev",
         role: UserRole.Student,
         avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=olivia",
+        dateOfBirth: "1997-05-11",
         createdAt: daysAgo(45),
       },
       {
@@ -142,6 +148,7 @@ async function seed() {
         email: "liam.thompson@student.dev",
         role: UserRole.Student,
         avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=liam",
+        dateOfBirth: "2003-12-02",
         createdAt: daysAgo(30),
       },
       {
@@ -149,6 +156,7 @@ async function seed() {
         email: "sophia.davis@student.dev",
         role: UserRole.Student,
         avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=sophia",
+        dateOfBirth: "2000-08-27",
         createdAt: daysAgo(20),
       },
     ])
@@ -162,6 +170,7 @@ async function seed() {
       email: "bossy.mcbossface@student.dev",
       role: UserRole.Student,
       avatarUrl: "https://api.dicebear.com/9.x/avataaars/svg?seed=bossy",
+      dateOfBirth: "1995-04-01",
       createdAt: daysAgo(40),
     })
     .returning()

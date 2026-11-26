@@ -45,6 +45,8 @@ export const users = sqliteTable("users", {
   role: text("role").notNull().$type<UserRole>(),
   avatarUrl: text("avatar_url"),
   bio: text("bio"),
+  // ISO calendar date, YYYY-MM-DD. Null when the user hasn't provided one.
+  dateOfBirth: text("date_of_birth"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
